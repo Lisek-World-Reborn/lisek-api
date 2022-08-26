@@ -1,0 +1,68 @@
+package config
+
+import (
+	"io/ioutil"
+	"os"
+
+	"gopkg.in/yaml.v3"
+)
+
+type ApiConfiguration struct {
+	Port   int64  `yaml:"port'`
+	Dsn    string `yaml:"dsn"`
+	Secret string `yaml:"secret"`
+}
+
+var LoadedConfiguration ApiConfiguration
+
+func IsConfigurationExists(filepath string) bool {
+	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+func GetConfiguration(filepath string) (*ApiConfiguration, error) {
+	if !IsConfigurationExists(filepath) {
+		return nil, nil
+	}
+
+	cfgBytes, err := ioutil.ReadFile(filepath)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg ApiConfiguration
+
+	err = yaml.Unmarshal(cfgBytes, &cfg)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &cfg, nil
+}
+
+func GenerateDefaultConfiguration(filepath string) error {
+	cfg := ApiConfiguration{
+		Port:   8080,
+		Dsn:    "host=localhost user=lisek password=lisek dbname=lisek port=5432 sslmode=disable TimeZone=Europe/Kiev",
+		Secret: "secret",
+	}
+
+	cfgBytes, err := yaml.Marshal(cfg)
+
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(filepath, cfgBytes, 0644)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
