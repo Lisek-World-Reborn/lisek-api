@@ -11,6 +11,10 @@ type ApiConfiguration struct {
 	Port   int64  `yaml:"port'`
 	Dsn    string `yaml:"dsn"`
 	Secret string `yaml:"secret"`
+	Redis  struct {
+		Address  string `yaml:"address"`
+		Password string `yaml:"password"`
+	} `yaml:"redis"`
 }
 
 var LoadedConfiguration ApiConfiguration

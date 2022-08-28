@@ -4,10 +4,14 @@ import (
 	"flag"
 	"strconv"
 
+	"github.com/Lisek-World-Reborn/lisek-api/channels"
 	"github.com/Lisek-World-Reborn/lisek-api/config"
+	"github.com/Lisek-World-Reborn/lisek-api/db"
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/Lisek-World-Reborn/lisek-api/routes"
 	"github.com/gin-gonic/gin"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -31,6 +35,29 @@ func main() {
 	config.LoadedConfiguration = *cfg
 
 	logger.Info("Configuration loaded")
+
+	dsn := cfg.Dsn
+
+	database, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+
+	if err != nil {
+		logger.Fatal(err.Error())
+		return
+	}
+
+	db.OpenedConnection = database
+
+	logger.Info("Database connection opened")
+
+	logger.Info("Connecting to redis.")
+
+	channels.Init()
+
+	logger.Info("Redis connection established.")
+
+	go channels.StartAcceptingRequests()
+
+	logger.Info("Started accepting server requests.")
 
 	logger.Info("Starting http server")
 	r := gin.Default()
