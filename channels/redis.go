@@ -26,4 +26,6 @@ func Init() {
 		logger.Fatal(err.Error())
 		os.Exit(0)
 	}
+
+	logger.Info("Redis ping - OK")
 }

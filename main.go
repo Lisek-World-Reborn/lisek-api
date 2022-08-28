@@ -55,15 +55,21 @@ func main() {
 
 	logger.Info("Redis connection established.")
 
-	go channels.StartAcceptingRequests()
+	//	go channels.StartAcceptingRequests()
 
-	logger.Info("Started accepting server requests.")
+	logger.Warning("Started accepting server requests. - NOT IMPLEMENTED")
 
 	logger.Info("Starting http server")
 	r := gin.Default()
 
 	r.GET("/", routes.Index)
 	r.GET("/load", routes.GetSystemLoad)
+	r.GET("/servers", routes.GetServers)
+	r.GET("/servers/:id", routes.GetServer)
+	r.POST("/servers", routes.CreateServer)
+	r.PUT("/servers/:id", routes.UpdateServer)
+
+	r.DELETE("/servers/:id", routes.DeleteServer)
 
 	r.Run(":" + strconv.Itoa(int(cfg.Port)))
 

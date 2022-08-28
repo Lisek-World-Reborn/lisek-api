@@ -58,13 +58,14 @@ func StartAcceptingRequests() {
 
 	pubsub := RedisConnection.Subscribe(ctx, "servers:*:request")
 
+	defer pubsub.Close()
 	for {
 
 		msg, err := pubsub.ReceiveMessage(ctx)
 
 		if err != nil {
-			logger.Error(err.Error())
-			break
+			logger.Error(err.Error() + " - Channel listening ")
+			continue
 		}
 
 		var m MinecraftRequest
