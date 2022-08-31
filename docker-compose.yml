@@ -66,6 +66,9 @@ services:
         - "BUILD_ENV=production"
     volumes:
       - ./config.docker.yml:/app/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DATA_DIR=./data/servers/
     ports:
       - "8080:8080"
     networks:

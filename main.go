@@ -48,6 +48,8 @@ func main() {
 
 	db.OpenedConnection = database
 
+	db.OpenedConnection.AutoMigrate(&db.Server{})
+
 	logger.Info("Database connection opened")
 
 	logger.Info("Connecting to redis.")
@@ -72,6 +74,7 @@ func main() {
 
 	r.DELETE("/servers/:id", routes.DeleteServer)
 	r.POST("/servers/:id/data", routes.PostServerMessage)
+	r.POST("/server/create", routes.GenerateServer)
 
 	r.Run(":" + strconv.Itoa(int(cfg.Port)))
 

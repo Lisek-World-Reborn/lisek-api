@@ -8,6 +8,7 @@ import (
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -34,11 +35,20 @@ func Init() {
 	DockerClient = cli
 
 	logger.Info("Docker initialized")
-
-	return
 }
 
 func CreateServer(server db.Server) {
+
+	logger.Info("Pulling container image")
+
+	_, err := DockerClient.ImagePull(context.TODO(), SERVER_IMAGE, types.ImagePullOptions{})
+
+	if err != nil {
+		logger.Info("Error pulling container image: " + err.Error())
+		os.Exit(0)
+		return
+	}
+
 	ctx := context.Background()
 	resp, err := DockerClient.ContainerCreate(ctx, &container.Config{
 		Image: SERVER_IMAGE,
@@ -52,9 +62,14 @@ func CreateServer(server db.Server) {
 		},
 	},
 		&container.HostConfig{
-			Binds: []string{
-				DATA_DIR + "/" + server.Name + ":/data",
-			}},
+			Mounts: []mount.Mount{
+				{
+					Type:   mount.TypeVolume,
+					Source: DATA_DIR + "/" + server.Name,
+					Target: "/data",
+				},
+			},
+		},
 		&network.NetworkingConfig{}, &v1.Platform{}, server.ContainerName)
 
 	if err != nil {
