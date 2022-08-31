@@ -1,0 +1,7 @@
+version: 1
+port: 8080
+dsn: host=db user=postgres password=postgres dbname=postgres port=5432 sslmode=disable TimeZone=Europe/Kiev
+secret: secret
+redis:
+    address: "redis:6379"
+    password: ""

@@ -7,6 +7,7 @@ import (
 	"github.com/Lisek-World-Reborn/lisek-api/channels"
 	"github.com/Lisek-World-Reborn/lisek-api/config"
 	"github.com/Lisek-World-Reborn/lisek-api/db"
+	"github.com/Lisek-World-Reborn/lisek-api/docker"
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/Lisek-World-Reborn/lisek-api/routes"
 	"github.com/gin-gonic/gin"
@@ -57,7 +58,7 @@ func main() {
 
 	//	go channels.StartAcceptingRequests()
 
-	logger.Warning("Started accepting server requests. - NOT IMPLEMENTED")
+	docker.Init()
 
 	logger.Info("Starting http server")
 	r := gin.Default()

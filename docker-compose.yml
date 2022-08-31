@@ -1,10 +1,13 @@
-version: '3'
+version: '3.8'
+
+volumes:
+  pgdata: {}
 
 services:
   db:
-    image: postgres
+    image: postgres:14
     volumes:
-      - ./data/db:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     ports:
       - "5432:5432"
     environment:
@@ -17,11 +20,14 @@ services:
     depends_on:
       - redis
     deploy:
-      restart_policy: on-failure
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
       labels:
         - db
     healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB}"]
+      test: [ "CMD", "pg_isready", "-d", "postgres" ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -32,25 +38,40 @@ services:
     networks:
       - default
     deploy:
-      restart_policy: on-failure
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5
       labels:
         - redis
     healthcheck:
-      test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
+      test:
+        [
+          "CMD",
+          "redis-cli",
+          "-h",
+          "localhost",
+          "-p",
+          "6379",
+          "ping"
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
-    web:
-      build:
-        context: .
-        dockerfile: docker/Dockerfile
-        args:
-          - "BUILD_ENV=production"
-      ports:
-        - "8080:8080"
-      networks:
-        - default
-      deploy:
-        restart_policy: on-failure
-        labels:
-          - web
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - "BUILD_ENV=production"
+    volumes:
+      - ./config.docker.yml:/app/config.yml
+    ports:
+      - "8080:8080"
+    networks:
+      - default
+    deploy:
+      restart_policy:
+        condition: on-failure
+        delay: 3s
+        max_attempts: 5

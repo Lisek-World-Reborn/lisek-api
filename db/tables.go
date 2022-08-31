@@ -18,11 +18,12 @@ func (u *User) SafeUsername() string {
 }
 
 type Server struct {
-	ID        uint      `gorm:"primary_key" json:"id"`
-	Name      string    `json:"name"`
-	IP        string    `json:"ip"`
-	Port      int       `json:"port"`
-	Region    string    `json:"region"`
-	CreatedAt time.Time `json:"created_at"`
-	LastPing  time.Time `json:"last_ping"`
+	ID            uint      `gorm:"primary_key" json:"id"`
+	Name          string    `json:"name"`
+	IP            string    `json:"ip"`
+	Port          int       `json:"port"`
+	Region        string    `json:"region"`
+	CreatedAt     time.Time `json:"created_at"`
+	LastPing      time.Time `json:"last_ping"`
+	ContainerName string    `json:"container_name"`
 }
