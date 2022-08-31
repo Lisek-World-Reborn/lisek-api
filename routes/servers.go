@@ -1,6 +1,10 @@
 package routes
 
 import (
+	"strconv"
+	"strings"
+
+	"github.com/Lisek-World-Reborn/lisek-api/channels"
 	"github.com/Lisek-World-Reborn/lisek-api/config"
 	"github.com/Lisek-World-Reborn/lisek-api/db"
 	"github.com/gin-gonic/gin"
@@ -52,5 +56,33 @@ func DeleteServer(c *gin.Context) {
 	server := db.Server{}
 	db.OpenedConnection.First(&server, c.Param("id"))
 	db.OpenedConnection.Delete(&server)
+	c.JSON(200, gin.H{"status": "ok"})
+}
+
+func PostServerMessage(c *gin.Context) {
+	server := db.Server{}
+	db.OpenedConnection.First(&server, c.Param("id"))
+
+	message := channels.MinecraftRequest{
+		UUID:      c.Param("uuid"),
+		Target:    c.Param("target"),
+		Arguments: strings.Split(c.Param("arguments"), ","),
+		Hash:      c.Param("hash"),
+	}
+
+	converted := strconv.Itoa(int(server.ID))
+
+	result, err := message.SendToServer(converted)
+
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
+	if !result {
+		c.JSON(500, gin.H{"error": "invalid request"})
+		return
+	}
+
 	c.JSON(200, gin.H{"status": "ok"})
 }

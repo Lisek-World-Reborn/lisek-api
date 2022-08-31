@@ -70,6 +70,7 @@ func main() {
 	r.PUT("/servers/:id", routes.UpdateServer)
 
 	r.DELETE("/servers/:id", routes.DeleteServer)
+	r.POST("/servers/:id/data", routes.PostServerMessage)
 
 	r.Run(":" + strconv.Itoa(int(cfg.Port)))
 

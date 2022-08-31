@@ -1,0 +1,56 @@
+version: '3'
+
+services:
+  db:
+    image: postgres
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=postgres
+    restart: always
+    networks:
+      - default
+    depends_on:
+      - redis
+    deploy:
+      restart_policy: on-failure
+      labels:
+        - db
+    healthcheck:
+      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  redis:
+    image: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - default
+    deploy:
+      restart_policy: on-failure
+      labels:
+        - redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "localhost", "-p", "6379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    web:
+      build:
+        context: .
+        dockerfile: docker/Dockerfile
+        args:
+          - "BUILD_ENV=production"
+      ports:
+        - "8080:8080"
+      networks:
+        - default
+      deploy:
+        restart_policy: on-failure
+        labels:
+          - web

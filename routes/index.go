@@ -21,7 +21,7 @@ func GetSystemLoad(c *gin.Context) {
 	usedMemory := mem.Used / 1024 / 1024
 	freeMemory := mem.Free / 1024 / 1024
 
-	notes := ""
+	notes := []string{}
 
 	cpuSystem := 0
 	cpuUser := 0
@@ -32,7 +32,7 @@ func GetSystemLoad(c *gin.Context) {
 		cpuUser = int(cpuLoad.User)
 		cpuIdle = int(cpuLoad.Idle)
 	} else {
-		notes += "Cpu load error: " + cpuErr.Error()
+		notes = append(notes, "Cpu load error: "+cpuErr.Error())
 	}
 
 	c.JSON(200, gin.H{
