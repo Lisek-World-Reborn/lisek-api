@@ -3,12 +3,14 @@ package docker
 import (
 	"context"
 	"os"
+	"path"
+	"strings"
+	"time"
 
 	"github.com/Lisek-World-Reborn/lisek-api/db"
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -39,9 +41,13 @@ func Init() {
 
 func CreateServer(server db.Server) {
 
+	logger.Info("Creating container for server " + server.Name + "(" + server.ContainerName + ")")
+
+	ctx, _ := context.WithTimeout(context.TODO(), time.Minute*5)
+
 	logger.Info("Pulling container image")
 
-	_, err := DockerClient.ImagePull(context.TODO(), SERVER_IMAGE, types.ImagePullOptions{})
+	_, err := DockerClient.ImagePull(ctx, SERVER_IMAGE, types.ImagePullOptions{})
 
 	if err != nil {
 		logger.Info("Error pulling container image: " + err.Error())
@@ -49,7 +55,11 @@ func CreateServer(server db.Server) {
 		return
 	}
 
-	ctx := context.Background()
+	serverBind := path.Join(DATA_DIR, server.ContainerName) + ":/data"
+
+	if os.Getenv("OS") == "WINDOWS" {
+		serverBind = strings.Replace(serverBind, "/", "\\", -1)
+	}
 	resp, err := DockerClient.ContainerCreate(ctx, &container.Config{
 		Image: SERVER_IMAGE,
 		Env: []string{
@@ -62,12 +72,8 @@ func CreateServer(server db.Server) {
 		},
 	},
 		&container.HostConfig{
-			Mounts: []mount.Mount{
-				{
-					Type:   mount.TypeVolume,
-					Source: DATA_DIR + "/" + server.Name,
-					Target: "/data",
-				},
+			Binds: []string{
+				serverBind,
 			},
 		},
 		&network.NetworkingConfig{}, &v1.Platform{}, server.ContainerName)
