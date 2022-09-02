@@ -17,6 +17,10 @@ type MinecraftRequest struct {
 	Hash      string   `json:"hash"`
 }
 
+type ServerAddedRequest struct {
+	ServerId int `json:"server_id"`
+}
+
 func (m MinecraftRequest) IsValid() bool {
 	stringToHash := m.UUID + m.Target + strings.Join(m.Arguments, " ")
 

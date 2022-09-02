@@ -2,15 +2,17 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path"
-	"strings"
 	"time"
 
+	"github.com/Lisek-World-Reborn/lisek-api/channels"
 	"github.com/Lisek-World-Reborn/lisek-api/db"
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -55,11 +57,10 @@ func CreateServer(server db.Server) {
 		return
 	}
 
-	serverBind := path.Join(DATA_DIR, server.ContainerName) + ":/data"
+	serverBind := path.Join(DATA_DIR, "servers", server.ContainerName)
 
-	if os.Getenv("OS") == "WINDOWS" {
-		serverBind = strings.Replace(serverBind, "/", "\\", -1)
-	}
+	os.MkdirAll(path.Join("/data", "servers", server.ContainerName), os.ModePerm)
+
 	resp, err := DockerClient.ContainerCreate(ctx, &container.Config{
 		Image: SERVER_IMAGE,
 		Env: []string{
@@ -72,8 +73,13 @@ func CreateServer(server db.Server) {
 		},
 	},
 		&container.HostConfig{
-			Binds: []string{
-				serverBind,
+			Mounts: []mount.Mount{
+				{
+					Type:     mount.TypeBind,
+					Source:   serverBind,
+					Target:   "/data",
+					ReadOnly: false,
+				},
 			},
 		},
 		&network.NetworkingConfig{}, &v1.Platform{}, server.ContainerName)
@@ -93,5 +99,18 @@ func CreateServer(server db.Server) {
 	}
 
 	logger.Info("Container started: " + resp.ID)
+
+	addedServerRequest := channels.ServerAddedRequest{
+		ServerId: int(server.ID),
+	}
+
+	addedServerRequestJson, err := json.Marshal(addedServerRequest)
+
+	if err != nil {
+		logger.Error("Error marshalling server added request: " + err.Error())
+		return
+	}
+
+	channels.RedisConnection.Publish(context.Background(), "servers:added", addedServerRequestJson)
 
 }

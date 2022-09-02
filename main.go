@@ -67,7 +67,6 @@ func main() {
 
 	r.GET("/", routes.Index)
 	r.GET("/load", routes.GetSystemLoad)
-	r.GET("/servers", routes.GetServers)
 	r.GET("/servers/:id", routes.GetServer)
 	r.POST("/servers", routes.CreateServer)
 	r.PUT("/servers/:id", routes.UpdateServer)
@@ -75,6 +74,8 @@ func main() {
 	r.DELETE("/servers/:id", routes.DeleteServer)
 	r.POST("/servers/:id/data", routes.PostServerMessage)
 	r.POST("/server/create", routes.GenerateServer)
+	r.GET("/server/:id/status", routes.ServerStatus)
+	r.GET("/servers", routes.GetServers)
 
 	r.Run(":" + strconv.Itoa(int(cfg.Port)))
 
