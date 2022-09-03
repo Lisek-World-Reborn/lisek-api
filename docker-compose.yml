@@ -83,3 +83,20 @@ services:
         condition: on-failure
         delay: 3s
         max_attempts: 5
+  velocity:
+    image: iztg/bungeecord
+    environment:
+      - TYPE=VELOCITY
+      - PLUGINS=https://cdn.lisek.world/base.jar
+      - SPIGET_PLUGINS=2124
+      - ENABLE_RCON=true
+      - RCON_PASSWORD=123456
+      - RCON_PORT=25575
+    ports:
+      - "25577:25577"
+    volumes:
+      - ./data/bungee:/data:rw
+    networks:
+      - default
+    depends_on:
+      - web
