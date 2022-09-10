@@ -134,10 +134,22 @@ func PreloadServers() {
 
 			logger.Info("Preloading server " + file.Name())
 
+			tarPath := path.Join("preloaded", file.Name(), "server.tar.gz")
+
+			buildContext, err := os.Open(tarPath)
+
+			if err != nil {
+				logger.Error("Error opening build context: " + err.Error())
+				return
+			}
+
+			defer buildContext.Close()
+
 			resp, err := DockerClient.ImageBuild(context.Background(), nil, types.ImageBuildOptions{
-				Dockerfile: "Dockerfile",
+				Dockerfile: path.Join("./preloaded", file.Name(), "Dockerfile"),
 				Tags:       []string{file.Name()},
 				Remove:     false,
+				Context:    buildContext,
 			})
 
 			if err != nil {
@@ -150,6 +162,43 @@ func PreloadServers() {
 			for scanner.Scan() {
 				logger.Info(scanner.Text())
 			}
+
+			if err := scanner.Err(); err != nil {
+				logger.Error("Error reading image build output: " + err.Error())
+				return
+			}
+
+			logger.Info("Server preloaded: " + file.Name())
+
+			logger.Info("Launching server " + file.Name())
+
+			ctx, _ := context.WithTimeout(context.TODO(), time.Minute*5)
+
+			serverBind := path.Join(DATA_DIR, "servers", file.Name())
+
+			os.MkdirAll(path.Join("/data", "servers", file.Name()), os.ModePerm)
+
+			response, err := DockerClient.ContainerCreate(ctx, &container.Config{
+				Image: file.Name(),
+			},
+				&container.HostConfig{
+					Mounts: []mount.Mount{
+						{
+							Type:     mount.TypeBind,
+							Source:   serverBind,
+							Target:   "/data",
+							ReadOnly: false,
+						},
+					},
+				},
+				&network.NetworkingConfig{}, &v1.Platform{}, file.Name())
+
+			if err != nil {
+				logger.Error("Error creating container: " + err.Error())
+				return
+			}
+
+			logger.Info("Container created: " + response.ID)
 
 		}
 	}

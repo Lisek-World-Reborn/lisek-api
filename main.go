@@ -62,6 +62,10 @@ func main() {
 
 	docker.Init()
 
+	logger.Info("Preloading servers")
+
+	docker.PreloadServers()
+
 	logger.Info("Starting http server")
 	r := gin.Default()
 

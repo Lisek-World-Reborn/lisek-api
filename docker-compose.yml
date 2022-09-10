@@ -68,16 +68,17 @@ services:
       - ./config.docker.yml:/app/config.yml
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data:rw
+      - ./preloaded:/app/preloaded:rw
     environment:
-      # Put your directory below
+      # Put your directory here
       - DATA_DIR=/home/dhcpcd9/Work/lisek-api/data/
     ports:
       - "8080:8080"
     networks:
       - default
     depends_on:
-      - db
       - redis
+      - db
     deploy:
       restart_policy:
         condition: on-failure
