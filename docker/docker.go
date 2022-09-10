@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"os"
@@ -70,6 +71,7 @@ func CreateServer(server db.Server) {
 			"MAX_MEMORY=2048M",
 			"TZ=Europe/Kiev",
 			"USE_AIKAR_FLAGS=true",
+			"ONLINE_MODE=false",
 		},
 	},
 		&container.HostConfig{
@@ -113,4 +115,42 @@ func CreateServer(server db.Server) {
 
 	channels.RedisConnection.Publish(context.Background(), "servers:added", addedServerRequestJson)
 
+}
+
+func PreloadServers() {
+
+	logger.Info("Preloading servers")
+
+	files, err := os.ReadDir("preloaded")
+
+	if err != nil {
+		logger.Error("Error reading preloaded servers directory: " + err.Error())
+		return
+	}
+
+	for _, file := range files {
+
+		if file.IsDir() {
+
+			logger.Info("Preloading server " + file.Name())
+
+			resp, err := DockerClient.ImageBuild(context.Background(), nil, types.ImageBuildOptions{
+				Dockerfile: "Dockerfile",
+				Tags:       []string{file.Name()},
+				Remove:     false,
+			})
+
+			if err != nil {
+				logger.Error("Error building image: " + err.Error())
+				return
+			}
+
+			scanner := bufio.NewScanner(resp.Body)
+
+			for scanner.Scan() {
+				logger.Info(scanner.Text())
+			}
+
+		}
+	}
 }
