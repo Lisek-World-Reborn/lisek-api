@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path"
 	"strconv"
@@ -126,6 +127,15 @@ func CreateServer(server db.Server) {
 
 }
 
+func serverExistsInDb(containerName string) bool {
+
+	var server db.Server
+
+	db.OpenedConnection.Where("container_name = ?", containerName).First(&server)
+
+	return server.ID != 0
+}
+
 func serverExists(name string) bool {
 
 	containerList, err := DockerClient.ContainerList(context.Background(), types.ContainerListOptions{
@@ -189,7 +199,7 @@ func createPreloadContainer(name string) {
 
 	serverBind := path.Join(DATA_DIR, "servers", server.ContainerName)
 
-	os.MkdirAll(path.Join("/data", "servers", server.ContainerName), os.ModePerm)
+	os.MkdirAll(path.Join("data", "servers", server.ContainerName), os.ModePerm)
 
 	mounts := []mount.Mount{
 		{
@@ -230,6 +240,20 @@ func createPreloadContainer(name string) {
 
 	logger.Info("Container created: " + container.ID)
 
+	network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+
+	if err != nil {
+		logger.Error("Error getting network: " + err.Error())
+		return
+	}
+
+	err = DockerClient.NetworkConnect(context.Background(), network.ID, container.ID, nil)
+
+	if err != nil {
+		logger.Error("Error connecting container to network: " + err.Error())
+		return
+	}
+
 	startPreloadedContainer(server.ContainerName)
 }
 
@@ -246,6 +270,22 @@ func startPreloadedContainer(name string) {
 
 	for _, container := range container {
 		if container.Names[0] == "/"+name {
+
+			network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+
+			if err != nil {
+				logger.Error("Error getting network: " + err.Error())
+				return
+			}
+
+			err = DockerClient.NetworkConnect(context.Background(), network.ID, container.ID, nil)
+
+			if err != nil {
+				logger.Error("Error connecting container to network: " + err.Error())
+				return
+			}
+
+			logger.Info("Container " + container.ID + " connected to network " + network.Name + " (" + network.ID + ")")
 			err = DockerClient.ContainerStart(context.Background(), container.ID, types.ContainerStartOptions{})
 
 			if err != nil {
@@ -254,6 +294,7 @@ func startPreloadedContainer(name string) {
 			}
 
 			logger.Info("Container started: " + container.ID)
+			return
 		}
 	}
 
@@ -275,7 +316,7 @@ func PreloadServers() {
 
 		if file.IsDir() {
 
-			if serverExists(file.Name()) {
+			if serverExistsInDb(file.Name()) {
 				logger.Info("Server " + file.Name() + " already exists, starting...")
 
 				startPreloadedContainer(file.Name())
@@ -338,6 +379,19 @@ func PreloadServers() {
 				continue
 			}
 
+			network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+
+			if err != nil {
+				logger.Error("Error getting network: " + err.Error())
+				return
+			}
+
+			err = DockerClient.NetworkConnect(context.Background(), network.ID, container.ID, nil)
+
+			if err != nil {
+				logger.Error("Error connecting container to network: " + err.Error())
+				return
+			}
 			//Inserting in db
 
 			portInt, err := strconv.Atoi(serverPort)
@@ -350,7 +404,7 @@ func PreloadServers() {
 			server := db.Server{
 				Name:          preloadedServer.Name,
 				ContainerName: file.Name(),
-				IP:            "0.0.0.0",
+				IP:            file.Name(), // Internal
 				Region:        "eu",
 				Port:          portInt,
 			}
@@ -366,4 +420,21 @@ func PreloadServers() {
 			logger.Info("Container started: " + container.ID)
 		}
 	}
+}
+
+func GetNetworkById(networkName string) (types.NetworkResource, error) {
+
+	networks, err := DockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
+
+	if err != nil {
+		return types.NetworkResource{}, err
+	}
+
+	for _, network := range networks {
+		if network.Name == networkName {
+			return network, nil
+		}
+	}
+
+	return types.NetworkResource{}, errors.New("Network not found")
 }

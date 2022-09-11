@@ -73,6 +73,7 @@ services:
       # Put your directory here
       - DATA_DIR=/home/dhcpcd9/Work/lisek-api/data/
       - PRELOADED_DIR=/home/dhcpcd9/Work/lisek-api/preloaded/
+      - NETWORK_NAME=lisek-api_lisek
     ports:
       - "8080:8080"
     networks:
