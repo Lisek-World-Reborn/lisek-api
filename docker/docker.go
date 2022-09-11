@@ -1,11 +1,11 @@
 package docker
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"os"
 	"path"
+	"strconv"
 	"time"
 
 	"github.com/Lisek-World-Reborn/lisek-api/channels"
@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -24,6 +25,14 @@ var DockerClient *client.Client
 const SERVER_IMAGE = "docker.io/itzg/minecraft-server"
 
 var DATA_DIR = os.Getenv("DATA_DIR")
+var PRELOADED_DIR = os.Getenv("PRELOADED_DIR")
+
+type PreloadedServer struct {
+	Mounts  []interface{}     `json:"mounts,omitempty"`
+	Env     map[string]string `json:"env,omitempty"`
+	Name    string            `json:"name,omitempty"`
+	Folders map[string]string `json:"folders,omitempty"`
+}
 
 func Init() {
 
@@ -117,6 +126,140 @@ func CreateServer(server db.Server) {
 
 }
 
+func serverExists(name string) bool {
+
+	containerList, err := DockerClient.ContainerList(context.Background(), types.ContainerListOptions{
+		All: true,
+	})
+
+	if err != nil {
+		logger.Error("Error listing containers: " + err.Error())
+		return false
+	}
+
+	for _, container := range containerList {
+		if container.Names[0] == "/"+name {
+			return true
+		}
+	}
+
+	return false
+}
+
+func createPreloadContainer(name string) {
+
+	server := db.Server{}
+
+	db.OpenedConnection.First("container_name = ?", name).First(&server)
+
+	if server.ID == 0 {
+		logger.Error("Server not found")
+		return
+	}
+
+	preloadedServer := PreloadedServer{}
+
+	preloadedServerJson, err := os.ReadFile(path.Join(PRELOADED_DIR, server.ContainerName+".json"))
+
+	if err != nil {
+		logger.Error("Error reading preloaded server file: " + err.Error())
+		return
+	}
+
+	err = json.Unmarshal(preloadedServerJson, &preloadedServer)
+
+	if err != nil {
+		logger.Error("Error unmarshalling preloaded server file: " + err.Error())
+		return
+	}
+
+	logger.Info("Creating container for server " + server.Name + "(" + server.ContainerName + ")")
+
+	ctx, _ := context.WithTimeout(context.TODO(), time.Minute*5)
+
+	logger.Info("Pulling container image")
+
+	_, err = DockerClient.ImagePull(ctx, SERVER_IMAGE, types.ImagePullOptions{})
+
+	if err != nil {
+		logger.Info("Error pulling container image: " + err.Error())
+		os.Exit(0)
+		return
+	}
+
+	serverBind := path.Join(DATA_DIR, "servers", server.ContainerName)
+
+	os.MkdirAll(path.Join("/data", "servers", server.ContainerName), os.ModePerm)
+
+	mounts := []mount.Mount{
+		{
+			Type:     mount.TypeBind,
+			Source:   serverBind,
+			Target:   "/data",
+			ReadOnly: false,
+		},
+	}
+
+	envs := []string{}
+
+	for key, value := range preloadedServer.Env {
+		envs = append(envs, key+"="+value)
+	}
+
+	serverPort := strconv.Itoa(server.Port)
+
+	container, err := DockerClient.ContainerCreate(context.Background(), &container.Config{
+		Image: SERVER_IMAGE,
+		Env:   envs,
+	}, &container.HostConfig{
+		Mounts: mounts,
+		PortBindings: nat.PortMap{
+			"25565/tcp": []nat.PortBinding{
+				{
+					HostIP:   "0.0.0.0",
+					HostPort: serverPort,
+				},
+			},
+		},
+	}, nil, nil, server.ContainerName)
+
+	if err != nil {
+		logger.Error("Error creating container: " + err.Error())
+		return
+	}
+
+	logger.Info("Container created: " + container.ID)
+
+	startPreloadedContainer(server.ContainerName)
+}
+
+func startPreloadedContainer(name string) {
+
+	container, err := DockerClient.ContainerList(context.Background(), types.ContainerListOptions{
+		All: true,
+	})
+
+	if err != nil {
+		logger.Error("Error listing containers: " + err.Error())
+		return
+	}
+
+	for _, container := range container {
+		if container.Names[0] == "/"+name {
+			err = DockerClient.ContainerStart(context.Background(), container.ID, types.ContainerStartOptions{})
+
+			if err != nil {
+				logger.Error("Error starting container: " + err.Error())
+				return
+			}
+
+			logger.Info("Container started: " + container.ID)
+		}
+	}
+
+	createPreloadContainer(name)
+
+}
 func PreloadServers() {
 
 	logger.Info("Preloading servers")
@@ -132,74 +275,95 @@ func PreloadServers() {
 
 		if file.IsDir() {
 
+			if serverExists(file.Name()) {
+				logger.Info("Server " + file.Name() + " already exists, starting...")
+
+				startPreloadedContainer(file.Name())
+				continue
+			}
+
 			logger.Info("Preloading server " + file.Name())
 
-			tarPath := path.Join("preloaded", file.Name(), "server.tar.gz")
+			preloadedServer := PreloadedServer{}
 
-			buildContext, err := os.Open(tarPath)
-
-			if err != nil {
-				logger.Error("Error opening build context: " + err.Error())
-				return
-			}
-
-			defer buildContext.Close()
-
-			resp, err := DockerClient.ImageBuild(context.Background(), nil, types.ImageBuildOptions{
-				Dockerfile: path.Join("./preloaded", file.Name(), "Dockerfile"),
-				Tags:       []string{file.Name()},
-				Remove:     false,
-				Context:    buildContext,
-			})
+			preloadedServerJson, err := os.ReadFile(path.Join("preloaded", file.Name(), "info.json"))
 
 			if err != nil {
-				logger.Error("Error building image: " + err.Error())
-				return
+				logger.Error("Error reading preloaded server info: " + err.Error())
+				continue
 			}
 
-			scanner := bufio.NewScanner(resp.Body)
+			err = json.Unmarshal(preloadedServerJson, &preloadedServer)
 
-			for scanner.Scan() {
-				logger.Info(scanner.Text())
+			if err != nil {
+				logger.Error("Error unmarshalling preloaded server info: " + err.Error())
+				continue
 			}
 
-			if err := scanner.Err(); err != nil {
-				logger.Error("Error reading image build output: " + err.Error())
-				return
+			envs := []string{}
+
+			for key, value := range preloadedServer.Env {
+				envs = append(envs, key+"="+value)
 			}
 
-			logger.Info("Server preloaded: " + file.Name())
+			var latestServer db.Server
 
-			logger.Info("Launching server " + file.Name())
+			db.OpenedConnection.Last(&latestServer)
 
-			ctx, _ := context.WithTimeout(context.TODO(), time.Minute*5)
+			lastId := 0
 
-			serverBind := path.Join(DATA_DIR, "servers", file.Name())
+			if latestServer.ID > 1 {
+				lastId = int(latestServer.ID)
+				logger.Info("Last server was not null!")
+			}
 
-			os.MkdirAll(path.Join("/data", "servers", file.Name()), os.ModePerm)
+			serverPort := strconv.Itoa(25565 + lastId)
 
-			response, err := DockerClient.ContainerCreate(ctx, &container.Config{
-				Image: file.Name(),
-			},
-				&container.HostConfig{
-					Mounts: []mount.Mount{
+			container, err := DockerClient.ContainerCreate(context.Background(), &container.Config{
+				Image: SERVER_IMAGE,
+				Env:   envs,
+			}, &container.HostConfig{
+				PortBindings: nat.PortMap{
+					"25565/tcp": []nat.PortBinding{
 						{
-							Type:     mount.TypeBind,
-							Source:   serverBind,
-							Target:   "/data",
-							ReadOnly: false,
+							HostIP:   "0.0.0.0",
+							HostPort: serverPort,
 						},
 					},
 				},
-				&network.NetworkingConfig{}, &v1.Platform{}, file.Name())
+			}, nil, nil, file.Name())
 
 			if err != nil {
 				logger.Error("Error creating container: " + err.Error())
-				return
+				continue
 			}
 
-			logger.Info("Container created: " + response.ID)
+			//Inserting in db
 
+			portInt, err := strconv.Atoi(serverPort)
+
+			if err != nil {
+				logger.Error("Error converting port to int: " + err.Error())
+				continue
+			}
+
+			server := db.Server{
+				Name:          preloadedServer.Name,
+				ContainerName: file.Name(),
+				IP:            "0.0.0.0",
+				Region:        "eu",
+				Port:          portInt,
+			}
+
+			db.OpenedConnection.Create(&server)
+
+			err = DockerClient.ContainerStart(context.Background(), container.ID, types.ContainerStartOptions{})
+			if err != nil {
+				logger.Error("Error starting container: " + err.Error())
+				continue
+			}
+
+			logger.Info("Container started: " + container.ID)
 		}
 	}
 }
