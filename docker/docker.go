@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Lisek-World-Reborn/lisek-api/channels"
+	"github.com/Lisek-World-Reborn/lisek-api/config"
 	"github.com/Lisek-World-Reborn/lisek-api/db"
 	"github.com/Lisek-World-Reborn/lisek-api/logger"
 	"github.com/docker/docker/api/types"
@@ -156,6 +157,22 @@ func serverExists(name string) bool {
 	return false
 }
 
+func GetPreparedEnvVariables(server db.Server) []string {
+	return []string{
+		"API_HOST=web",
+		"API_PORT=80",
+		"API_KEY=" + config.LoadedConfiguration.Secret,
+		"SERVER_ID=" + strconv.Itoa(int(server.ID)),
+		"DB_HOST=db",
+		"DB_PORT=5432",
+		"DB_USER=postgres",
+		"DB_PASSWORD=postgres",
+		"DB_NAME=postgres",
+		"REDIS_HOST=redis",
+		"REDIS_PORT=6379",
+	}
+}
+
 func createPreloadContainer(name string) {
 
 	server := db.Server{}
@@ -199,7 +216,7 @@ func createPreloadContainer(name string) {
 
 	serverBind := path.Join(DATA_DIR, "servers", server.ContainerName)
 
-	os.MkdirAll(path.Join("data", "servers", server.ContainerName), os.ModePerm)
+	os.MkdirAll(path.Join("/data", "servers", server.ContainerName), os.ModePerm)
 
 	mounts := []mount.Mount{
 		{
@@ -215,6 +232,7 @@ func createPreloadContainer(name string) {
 	for key, value := range preloadedServer.Env {
 		envs = append(envs, key+"="+value)
 	}
+	envs = append(envs, GetPreparedEnvVariables(server)...)
 
 	serverPort := strconv.Itoa(server.Port)
 
@@ -240,7 +258,7 @@ func createPreloadContainer(name string) {
 
 	logger.Info("Container created: " + container.ID)
 
-	network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+	network, err := GetNetworkByName(os.Getenv("NETWORK_NAME"))
 
 	if err != nil {
 		logger.Error("Error getting network: " + err.Error())
@@ -271,7 +289,7 @@ func startPreloadedContainer(name string) {
 	for _, container := range container {
 		if container.Names[0] == "/"+name {
 
-			network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+			network, err := GetNetworkByName(os.Getenv("NETWORK_NAME"))
 
 			if err != nil {
 				logger.Error("Error getting network: " + err.Error())
@@ -347,6 +365,8 @@ func PreloadServers() {
 				envs = append(envs, key+"="+value)
 			}
 
+			envs = append(envs, GetPreparedEnvVariables(db.Server{})...)
+
 			var latestServer db.Server
 
 			db.OpenedConnection.Last(&latestServer)
@@ -358,12 +378,33 @@ func PreloadServers() {
 				logger.Info("Last server was not null!")
 			}
 
-			serverPort := strconv.Itoa(25565 + lastId)
+			var serverPort string
+
+			if 25565+lastId == 25577 {
+				serverPort = strconv.Itoa(25565 + lastId + 1)
+			} else {
+				serverPort = strconv.Itoa(25565 + lastId)
+			}
+
+			serverBind := path.Join(DATA_DIR, "servers", file.Name())
+			logger.Info("Server bind: " + serverBind)
+
+			os.MkdirAll(path.Join("/data", "servers", file.Name()), os.ModePerm)
+
+			mounts := []mount.Mount{
+				{
+					Type:     mount.TypeBind,
+					Source:   serverBind,
+					Target:   "/data",
+					ReadOnly: false,
+				},
+			}
 
 			container, err := DockerClient.ContainerCreate(context.Background(), &container.Config{
 				Image: SERVER_IMAGE,
 				Env:   envs,
 			}, &container.HostConfig{
+				Mounts: mounts,
 				PortBindings: nat.PortMap{
 					"25565/tcp": []nat.PortBinding{
 						{
@@ -379,7 +420,7 @@ func PreloadServers() {
 				continue
 			}
 
-			network, err := GetNetworkById(os.Getenv("NETWORK_NAME"))
+			network, err := GetNetworkByName(os.Getenv("NETWORK_NAME"))
 
 			if err != nil {
 				logger.Error("Error getting network: " + err.Error())
@@ -422,7 +463,7 @@ func PreloadServers() {
 	}
 }
 
-func GetNetworkById(networkName string) (types.NetworkResource, error) {
+func GetNetworkByName(networkName string) (types.NetworkResource, error) {
 
 	networks, err := DockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
 

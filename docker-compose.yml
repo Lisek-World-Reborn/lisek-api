@@ -90,7 +90,7 @@ services:
     image: itzg/bungeecord:java11
     environment:
       - TYPE=VELOCITY
-      - PLUGINS=https://github.com/Lisek-World-Reborn/LisekVelocity/releases/download/v1.1/base.jar
+      - PLUGINS=https://github.com/Lisek-World-Reborn/LisekVelocity/releases/download/v1.2/base.jar
       - SPIGET_PLUGINS=2124
       - ENABLE_RCON=true
       - RCON_PASSWORD=123456
