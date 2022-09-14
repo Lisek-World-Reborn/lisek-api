@@ -27,3 +27,14 @@ type Server struct {
 	LastPing      time.Time `json:"last_ping"`
 	ContainerName string    `json:"container_name"`
 }
+
+type User struct {
+	ID            uint `gorm:"primary_key"`
+	Username      string
+	UUID          string
+	DiscordID     uint64
+	CreatedAt     time.Time
+	Gender        string
+	Registred     bool
+	LastIpAddress string
+}

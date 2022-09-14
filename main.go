@@ -49,6 +49,7 @@ func main() {
 	db.OpenedConnection = database
 
 	db.OpenedConnection.AutoMigrate(&db.Server{})
+	db.OpenedConnection.Table("users").AutoMigrate(&db.User{})
 
 	logger.Info("Database connection opened")
 
